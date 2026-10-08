@@ -284,45 +284,37 @@ async function loadServers() {
   S.servers = r.data.servers || [];
 }
 
-function renderServers(filter) {
-  const q = (filter || '').toLowerCase();
-  const byCountry = {};
-  for (const s of S.servers) {
-    if (s.Status !== 1) continue;
-    const c = s.ExitCountry || '?';
-    (byCountry[c] = byCountry[c] || []).push(s);
-  }
+function renderServers() {
+  // Simplified: top 4 least-loaded servers in the USA
   const list = $('srv-list');
   list.innerHTML = '';
-  const countries = Object.keys(byCountry).sort((a, b) =>
-    countryName(a).localeCompare(countryName(b)));
-  for (const c of countries) {
-    const srvs = byCountry[c].filter((s) =>
-      !q || s.Name.toLowerCase().includes(q) || (s.City || '').toLowerCase().includes(q) ||
-      countryName(c).toLowerCase().includes(q));
-    if (!srvs.length) continue;
-    srvs.sort((a, b) => a.Load - b.Load);
-    const minLoad = Math.min(...srvs.map((s) => s.Load));
-    const h = document.createElement('div');
-    h.className = 'country';
-    h.textContent = countryName(c) + ' · ' + srvs.length + ' · carga mín ' + minLoad + '%';
-    list.appendChild(h);
-    for (const s of srvs) {
-      const online = (s.Servers || []).filter((p) => p.Status === 1);
-      if (!online.length) continue;
-      const div = document.createElement('div');
-      div.className = 'item';
-      div.innerHTML =
-        '<div class="t">' + esc(s.Name) + ' <span class="badge">' + esc(TIER_NAMES[s.Tier] || s.Tier) + '</span></div>' +
-        '<div class="s">' + esc(s.City || '') + ' · score ' + Number(s.Score).toFixed(1) + '</div>' +
-        '<div>' + featureBadges(s.Features) + '</div>' +
-        '<div class="loadbar"><div style="width:' + s.Load + '%;background:' + loadColor(s.Load) + '"></div></div>' +
-        '<div class="s">Carga: ' + s.Load + '%</div>';
-      div.onclick = () => startCreate(s);
-      list.appendChild(div);
-    }
+  const us = S.servers.filter((s) =>
+    s.Status === 1 && (s.ExitCountry || '').toUpperCase() === 'US');
+  us.sort((a, b) => (a.Load || 999) - (b.Load || 999));
+  const top = us.slice(0, 4);
+  if (!top.length) {
+    list.innerHTML = '<div class="item"><div class="s">No hay servidores de EE.UU. disponibles.</div></div>';
+    return;
   }
-  if (!list.children.length) list.innerHTML = '<div class="item"><div class="s">Sin resultados.</div></div>';
+  const h = document.createElement('div');
+  h.className = 'country';
+  h.textContent = 'Estados Unidos · top 4 por menor carga';
+  list.appendChild(h);
+  for (const s of top) {
+    const online = (s.Servers || []).filter((p) => p.Status === 1);
+    if (!online.length) continue;
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerHTML =
+      '<div class="t">' + esc(s.Name) + ' <span class="badge">' + esc(TIER_NAMES[s.Tier] || s.Tier) + '</span></div>' +
+      '<div class="s">' + esc(s.City || '') + ' · score ' + Number(s.Score).toFixed(1) + '</div>' +
+      '<div>' + featureBadges(s.Features) + '</div>' +
+      '<div class="loadbar"><div style="width:' + s.Load + '%;background:' + loadColor(s.Load) + '"></div></div>' +
+      '<div class="s">Carga: ' + s.Load + '%</div>';
+    div.onclick = () => startCreate(s);
+    list.appendChild(div);
+  }
+  if (list.children.length <= 1) list.innerHTML = '<div class="item"><div class="s">Sin resultados.</div></div>';
 }
 
 /* ============================== create ============================== */
@@ -513,13 +505,11 @@ function wireUI() {
     try {
       toast('Cargando servidores…');
       await loadServers();
-      renderServers('');
-      $('srv-search').value = '';
+      renderServers();
       show('scr-servers');
     } catch (e) { toast('Error: ' + e.message); }
   };
   $('btn-refresh').onclick = () => refreshConfigs();
-  $('srv-search').oninput = (e) => renderServers(e.target.value);
   $('back-main1').onclick = () => show('scr-main');
   $('back-servers').onclick = () => show('scr-servers');
   $('back-main2').onclick = () => show('scr-main');

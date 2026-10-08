@@ -1,4 +1,4 @@
-import { srpProofs } from './srp.js';
+import { srpProofs } from './srp.js?v=1.0.4';
 
 /* ============================== config ============================== */
 const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev'; // v1.0.1

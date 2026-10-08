@@ -1,7 +1,7 @@
 import { srpProofs } from './srp.js';
 
 /* ============================== config ============================== */
-const WORKER_URL = 'https://__WORKER_HOST__'; // replaced at deploy time
+const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev';
 const FEATURE_NAMES = { 1: 'SecureCore', 2: 'Tor', 4: 'P2P', 8: 'Streaming', 16: 'IPv6' };
 const TIER_NAMES = { 0: 'Free', 2: 'Plus', 3: 'Visionary' };
 

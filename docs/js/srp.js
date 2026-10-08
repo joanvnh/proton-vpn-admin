@@ -90,8 +90,13 @@ export async function hashPasswordV4(password, saltB64, modulusLe) {
   const encSalt = bcryptB64Encode(
     concatBytes(salt, new TextEncoder().encode('proton')) // 22 bytes -> 30 chars
   );
-  // bcryptjs is loaded globally as `bcrypt` (vendored)
-  const crypted = bcrypt.hashSync(password, '$2y$10$' + encSalt);
+  // bcryptjs UMD exposes itself as dcodeIO.bcrypt in browsers
+  // (in Node tests it may be set as a bare global)
+  const bc = (typeof globalThis !== 'undefined' && globalThis.dcodeIO && globalThis.dcodeIO.bcrypt)
+    || (typeof globalThis !== 'undefined' && globalThis.bcrypt)
+    || (typeof bcrypt !== 'undefined' ? bcrypt : null);
+  if (!bc) throw new Error('Librería bcrypt no cargada');
+  const crypted = bc.hashSync(password, '$2y$10$' + encSalt);
   return expandHash(concatBytes(new TextEncoder().encode(crypted), modulusLe));
 }
 

@@ -16,7 +16,7 @@
  *  - Var PAGES_ORIGIN (default https://joanvnh.github.io)
  */
 
-const PROTON_API = 'https://api.proton.me';
+const PROTON_API = 'https://vpn-api.proton.me';
 const APP_VERSION = 'linux-vpn@4.13.1';
 const USER_AGENT = 'ProtonVPN/4.13.1 (Linux; Ubuntu)';
 const SERVER_CACHE_TTL = 10 * 60; // seconds
@@ -99,7 +99,7 @@ async function proton(path, opts, session) {
   return { status: res.status, data };
 }
 
-function apiError(data) {
+function apiError(data, httpStatus) {
   const code = data && data.Code;
   const messages = {
     8002: 'Contraseña incorrecta.',
@@ -108,10 +108,14 @@ function apiError(data) {
     10013: 'Esta cuenta usa el modo legacy de 2 contraseñas, no soportado por la API.',
     5003: 'Versión de app rechazada por Proton.',
   };
+  const base = messages[code] || (data && data.Error) || 'Error de la API de Proton.';
+  // Always surface the raw code + HTTP status so failures are diagnosable
+  const suffix = ' (código ' + (code || 0) + (httpStatus ? ', http ' + httpStatus : '') + ')';
   return {
     error: 'proton_error',
     code: code || 0,
-    message: messages[code] || (data && data.Error) || 'Error de la API de Proton.',
+    httpStatus: httpStatus || 0,
+    message: messages[code] ? base : base + suffix,
   };
 }
 
@@ -199,7 +203,7 @@ async function handle(req, env) {
       body: { Username: body.username },
     });
     const d = r.data || {};
-    if (d.Code !== 1000 && d.Code !== 1001) return json(apiError(d), 502, env, req);
+    if (d.Code !== 1000 && d.Code !== 1001) return json(apiError(d, r.status), 502, env, req);
     return json({
       version: d.Version,
       salt: d.Salt,
@@ -226,7 +230,7 @@ async function handle(req, env) {
     const r = await proton('/core/v4/auth', { method: 'POST', body: authBody });
     const d = r.data || {};
     if ((d.Code !== 1000 && d.Code !== 1001) || !d.AccessToken) {
-      return json(apiError(d), 502, env, req);
+      return json(apiError(d, r.status), 502, env, req);
     }
     if (d.ServerProof !== expectedServerProof) {
       return json({ error: 'server_proof_mismatch', message: 'El servidor no pasó la verificación.' }, 502, env, req);
@@ -275,7 +279,7 @@ async function handle(req, env) {
     const r = await proton('/vpn/v1/logicals', {}, s.sess);
     const d = r.data || {};
     if ((d.Code !== 1000 && d.Code !== 1001) || !d.LogicalServers) {
-      return json(apiError(d), 502, env, req);
+      return json(apiError(d, r.status), 502, env, req);
     }
     await env.SESS.put('servers_cache', JSON.stringify({ ts: Date.now(), servers: d.LogicalServers }),
       { expirationTtl: SERVER_CACHE_TTL });
@@ -295,7 +299,7 @@ async function handle(req, env) {
       const r = await proton(p, {}, s.sess);
       const d = r.data || {};
       if ((d.Code !== 1000 && d.Code !== 1001) || !d.Certificates) {
-        return json(apiError(d), 502, env, req);
+        return json(apiError(d, r.status), 502, env, req);
       }
       all.push(...d.Certificates);
       if (d.Certificates.length < 50) break;
@@ -325,7 +329,7 @@ async function handle(req, env) {
     const r = await proton('/vpn/v1/certificate', { method: 'POST', body: certReq }, s.sess);
     const d = r.data || {};
     if ((d.Code !== 1000 && d.Code !== 1001) || !d.SerialNumber) {
-      return json(apiError(d), 502, env, req);
+      return json(apiError(d, r.status), 502, env, req);
     }
     return json({
       serialNumber: d.SerialNumber,
@@ -346,7 +350,7 @@ async function handle(req, env) {
     const r = await proton('/vpn/v1/certificate/' + encodeURIComponent(serial),
       { method: 'DELETE' }, s.sess);
     const d = r.data || {};
-    if (d.Code !== 1000 && d.Code !== 1001) return json(apiError(d), 502, env, req);
+    if (d.Code !== 1000 && d.Code !== 1001) return json(apiError(d, r.status), 502, env, req);
     return json({ ok: true }, 200, env, req);
   }
 

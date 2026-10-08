@@ -267,13 +267,16 @@ async function handle(req, env) {
     return { sess };
   };
 
-  // ---- GET /api/servers : cached logical server list ----
+  // ---- GET /api/servers : cached logical server list (per account) ----
+  // NOTE: logicals are account-specific (tier filtering), so the cache
+  // MUST be keyed per account, never global.
   if (path === '/api/servers' && req.method === 'GET') {
-    const cached = await env.SESS.get('servers_cache', 'json');
+    const label = url.searchParams.get('label') || '';
+    const cacheKey = 'servers_cache:' + tgId + ':' + label;
+    const cached = await env.SESS.get(cacheKey, 'json');
     if (cached && Date.now() - cached.ts < SERVER_CACHE_TTL * 1000) {
       return json({ servers: cached.servers, cached: true }, 200, env, req);
     }
-    const label = url.searchParams.get('label');
     const s = await needSession(label);
     if (s.err) return s.err;
     const r = await proton('/vpn/v1/logicals', {}, s.sess);
@@ -281,7 +284,7 @@ async function handle(req, env) {
     if ((d.Code !== 1000 && d.Code !== 1001) || !d.LogicalServers) {
       return json(apiError(d, r.status), 502, env, req);
     }
-    await env.SESS.put('servers_cache', JSON.stringify({ ts: Date.now(), servers: d.LogicalServers }),
+    await env.SESS.put(cacheKey, JSON.stringify({ ts: Date.now(), servers: d.LogicalServers }),
       { expirationTtl: SERVER_CACHE_TTL });
     return json({ servers: d.LogicalServers, cached: false }, 200, env, req);
   }

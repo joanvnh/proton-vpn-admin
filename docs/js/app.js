@@ -260,9 +260,14 @@ function confirmDeleteAccount(label) {
 
 async function openAccount(label) {
   S.activeLabel = label;
+  // Clear stale data immediately so the previous account's configs/servers
+  // are never shown while the new account loads (or if its login fails).
+  S.configs = [];
+  S.servers = [];
   $('main-title').textContent = label;
   show('scr-main');
   renderChips();
+  renderConfigs();
   await refreshConfigs();
 }
 

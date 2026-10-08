@@ -1,0 +1,14 @@
+# Referencia para despliegue con wrangler. El worker también se puede pegar
+# directo en el dashboard (worker.js es un solo archivo sin dependencias).
+name = "proton-vpn-admin"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[[kv_namespaces]]
+binding = "SESS"
+# id = "<pegar el id del namespace KV creado en el dashboard>"
+
+[vars]
+OWNER_ID = "775842719"
+PAGES_ORIGIN = "https://joanvnh.github.io"
+# BOT_TOKEN va como secreto: wrangler secret put BOT_TOKEN

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Proton VPN Admin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- PIN gate -->
+  <section id="scr-pin" class="screen">
+    <div class="card center">
+      <h1>🔐 Proton VPN Admin</h1>
+      <p id="pin-sub">Introduce tu PIN para abrir la bóveda.</p>
+      <input id="pin-input" type="password" inputmode="numeric" autocomplete="off"
+             placeholder="PIN" maxlength="32">
+      <button id="pin-ok" class="btn primary">Abrir</button>
+      <p id="pin-err" class="err"></p>
+    </div>
+  </section>
+
+  <!-- Accounts -->
+  <section id="scr-accounts" class="screen hidden">
+    <header class="topbar"><h1>Mis cuentas</h1></header>
+    <div id="acct-list" class="list"></div>
+    <div class="card">
+      <h2>Añadir cuenta</h2>
+      <input id="new-label" placeholder="Etiqueta (ej. personal)" maxlength="24">
+      <input id="new-user" placeholder="Usuario Proton" autocomplete="username">
+      <input id="new-pass" type="password" placeholder="Contraseña" autocomplete="current-password">
+      <button id="add-acct" class="btn primary">Guardar cuenta</button>
+      <p id="acct-err" class="err"></p>
+    </div>
+  </section>
+
+  <!-- Main: configs of active account -->
+  <section id="scr-main" class="screen hidden">
+    <header class="topbar">
+      <button id="back-accounts" class="btn ghost">‹</button>
+      <h1 id="main-title">Cuenta</h1>
+    </header>
+    <div id="acct-chips" class="chips"></div>
+    <div class="row actions">
+      <button id="btn-new" class="btn primary">＋ Nueva config</button>
+      <button id="btn-refresh" class="btn">↻</button>
+    </div>
+    <div id="cfg-list" class="list"></div>
+  </section>
+
+  <!-- Server picker -->
+  <section id="scr-servers" class="screen hidden">
+    <header class="topbar">
+      <button id="back-main1" class="btn ghost">‹</button>
+      <h1>Servidores</h1>
+    </header>
+    <input id="srv-search" placeholder="Buscar país o servidor…">
+    <div id="srv-list" class="list"></div>
+  </section>
+
+  <!-- Create form -->
+  <section id="scr-create" class="screen hidden">
+    <header class="topbar">
+      <button id="back-servers" class="btn ghost">‹</button>
+      <h1>Nueva config</h1>
+    </header>
+    <div class="card">
+      <div id="create-srv" class="srv-summary"></div>
+      <label>Nombre del dispositivo
+        <input id="f-name" maxlength="64">
+      </label>
+      <label>Duración del certificado
+        <select id="f-duration">
+          <option value="43200">30 días</option>
+          <option value="129600" selected>90 días</option>
+          <option value="262800">6 meses</option>
+          <option value="525600">1 año</option>
+        </select>
+      </label>
+      <label>NetShield
+        <select id="f-netshield">
+          <option value="0" selected>Desactivado</option>
+          <option value="1">Solo malware</option>
+          <option value="2">Malware + anuncios + rastreadores</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="f-nat"> Moderate NAT (gaming)</label>
+      <label class="check"><input type="checkbox" id="f-pf"> Port forwarding (NAT-PMP)</label>
+      <label class="check"><input type="checkbox" id="f-acc" checked> VPN Accelerator</label>
+      <button id="btn-create" class="btn primary">Crear configuración</button>
+      <p id="create-err" class="err"></p>
+    </div>
+  </section>
+
+  <!-- Result -->
+  <section id="scr-result" class="screen hidden">
+    <header class="topbar">
+      <button id="back-main2" class="btn ghost">‹</button>
+      <h1>Config creada</h1>
+    </header>
+    <div class="card">
+      <p id="result-meta" class="meta"></p>
+      <pre id="result-conf" class="conf"></pre>
+      <div class="row">
+        <button id="btn-copy" class="btn">Copiar</button>
+        <button id="btn-dl" class="btn">Descargar .conf</button>
+        <button id="btn-qr" class="btn">QR</button>
+      </div>
+      <div id="qr-box" class="hidden center"></div>
+    </div>
+  </section>
+
+  <!-- generic modal -->
+  <div id="modal" class="hidden">
+    <div class="modal-card">
+      <h2 id="modal-title"></h2>
+      <div id="modal-body"></div>
+      <div class="row" id="modal-btns"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+</div>
+
+<script src="vendor/bcrypt.js"></script>
+<script src="vendor/nacl-fast.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

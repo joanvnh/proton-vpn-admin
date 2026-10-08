@@ -54,7 +54,7 @@
   <section id="scr-servers" class="screen hidden">
     <header class="topbar">
       <button id="back-main1" class="btn ghost">‹</button>
-      <h1>EE.UU. · menos saturados</h1>
+      <h1>EE.UU. · gratuitos</h1>
     </header>
     <div id="srv-list" class="list"></div>
   </section>
@@ -67,9 +67,20 @@
     </header>
     <div class="card">
       <div id="create-srv" class="srv-summary"></div>
-      <label>Nombre del dispositivo
-        <input id="f-name" maxlength="64">
+      <label>1. Nombre del dispositivo/certificado
+        <input id="f-name" maxlength="64" placeholder="Elige un nombre para el archivo de certificado generado.">
       </label>
+      <label>2. Plataforma
+        <div class="radios" id="f-platform">
+          <label class="radio"><input type="radio" name="platform" value="Android" checked> Android</label>
+          <label class="radio"><input type="radio" name="platform" value="iOS"> iOS</label>
+          <label class="radio"><input type="radio" name="platform" value="Windows"> Windows</label>
+          <label class="radio"><input type="radio" name="platform" value="macOS"> macOS</label>
+          <label class="radio"><input type="radio" name="platform" value="GNU/Linux"> GNU/Linux</label>
+          <label class="radio"><input type="radio" name="platform" value="Enrutador"> Enrutador</label>
+        </div>
+      </label>
+      <label>3. Opciones de VPN</label>
       <label>Duración del certificado
         <select id="f-duration">
           <option value="43200">30 días</option>
@@ -129,9 +140,9 @@
   </div>
 </div>
 
-<script src="vendor/bcrypt.js?v=1.0.4"></script>
-<script src="vendor/nacl-fast.min.js?v=1.0.4"></script>
-<script src="vendor/qrcode.js?v=1.0.4"></script>
-<script type="module" src="js/app.js?v=1.0.4"></script>
+<script src="vendor/bcrypt.js?v=1.0.5"></script>
+<script src="vendor/nacl-fast.min.js?v=1.0.5"></script>
+<script src="vendor/qrcode.js?v=1.0.5"></script>
+<script type="module" src="js/app.js?v=1.0.5"></script>
 </body>
 </html>

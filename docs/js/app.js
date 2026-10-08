@@ -1,4 +1,4 @@
-import { srpProofs } from './srp.js?v=1.0.4';
+import { srpProofs } from './srp.js?v=1.0.5';
 
 /* ============================== config ============================== */
 const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev'; // v1.0.1
@@ -303,20 +303,20 @@ async function loadServers() {
 }
 
 function renderServers() {
-  // Simplified: top 4 least-loaded servers in the USA
+  // Simplified: top 4 least-loaded FREE (Tier 0) servers in the USA
   const list = $('srv-list');
   list.innerHTML = '';
   const us = S.servers.filter((s) =>
-    s.Status === 1 && (s.ExitCountry || '').toUpperCase() === 'US');
+    s.Status === 1 && (s.ExitCountry || '').toUpperCase() === 'US' && (s.Tier || 0) === 0);
   us.sort((a, b) => (a.Load || 999) - (b.Load || 999));
   const top = us.slice(0, 4);
   if (!top.length) {
-    list.innerHTML = '<div class="item"><div class="s">No hay servidores de EE.UU. disponibles.</div></div>';
+    list.innerHTML = '<div class="item"><div class="s">No hay servidores gratuitos de EE.UU. disponibles.</div></div>';
     return;
   }
   const h = document.createElement('div');
   h.className = 'country';
-  h.textContent = 'Estados Unidos · top 4 por menor carga';
+  h.textContent = 'Estados Unidos · gratuitos · top 4 por menor carga';
   list.appendChild(h);
   for (const s of top) {
     const online = (s.Servers || []).filter((p) => p.Status === 1);
@@ -336,6 +336,11 @@ function renderServers() {
 }
 
 /* ============================== create ============================== */
+function getPlatform() {
+  const el = document.querySelector('#f-platform input[name="platform"]:checked');
+  return el ? el.value : 'Android';
+}
+
 function startCreate(server) {
   S.createServer = server;
   const online = (server.Servers || []).filter((p) => p.Status === 1);
@@ -343,7 +348,8 @@ function startCreate(server) {
   $('create-srv').innerHTML =
     '<b>' + esc(server.Name) + '</b> · ' + esc(countryName(server.ExitCountry)) +
     '<br><span class="meta">Carga ' + server.Load + '% · ' + esc(S.createServer._phys.EntryIP) + '</span>';
-  $('f-name').value = 'joan-' + (server.ExitCountry || 'xx').toLowerCase() + '-' + Date.now().toString(36);
+  const plat = getPlatform().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  $('f-name').value = 'joan-' + plat + '-' + (server.ExitCountry || 'xx').toLowerCase() + '-' + Date.now().toString(36);
   $('create-err').textContent = '';
   show('scr-create');
 }
@@ -365,10 +371,11 @@ function genKeypair() {
   return { pem, xPrivB64: b64(xsk) };
 }
 
-function buildConf(server, phys, xPrivB64, deviceName) {
+function buildConf(server, phys, xPrivB64, deviceName, platform) {
   const meta = [
     '# ProtonVPN WireGuard — generado por Proton VPN Admin',
     '# Device: ' + deviceName,
+    '# Platform: ' + (platform || '-'),
     '# Server: ' + server.Name + ' (' + countryName(server.ExitCountry) + ')',
     '# Load: ' + server.Load + '%',
     '',
@@ -413,7 +420,8 @@ async function doCreate() {
       return doCreate();
     }
     if (r.status !== 200) throw new Error(r.data.message || 'No se pudo crear');
-    const conf = buildConf(S.createServer, S.createServer._phys, kp.xPrivB64, r.data.deviceName);
+    const platform = getPlatform();
+    const conf = buildConf(S.createServer, S.createServer._phys, kp.xPrivB64, r.data.deviceName, platform);
     S.lastConf = conf;
     S.lastConfName = (r.data.deviceName || 'proton').replace(/[^a-zA-Z0-9._-]+/g, '_') + '.conf';
     $('result-meta').textContent =

@@ -62,6 +62,9 @@ label.check input { width: auto; margin: 0; }
   display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px;
   background: #00000014; margin: 2px 2px 0 0;
 }
+.radios { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 4px; }
+.radio { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); margin: 0; }
+.radio input { width: auto; margin: 0; accent-color: var(--btn); }
 .conf {
   background: #00000010; border-radius: 10px; padding: 10px; font-size: 12px;
   overflow-x: auto; white-space: pre; max-height: 300px; overflow-y: auto;

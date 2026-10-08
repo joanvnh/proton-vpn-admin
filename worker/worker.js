@@ -344,16 +344,28 @@ async function handle(req, env) {
   }
 
   // ---- DELETE /api/configs/:serial?label= : revoke a config ----
+  // Proton's API: DELETE /vpn/v1/certificate with {"SerialNumber": ...} in body.
+  // Requires `full` (or `password`) session scope — VPN API clients may not
+  // have it; in that case we surface a clear message pointing to the web dashboard.
   const delMatch = path.match(/^\/api\/configs\/([^/]+)$/);
   if (delMatch && req.method === 'DELETE') {
     const label = url.searchParams.get('label');
     const s = await needSession(label);
     if (s.err) return s.err;
     const serial = decodeURIComponent(delMatch[1]);
-    const r = await proton('/vpn/v1/certificate/' + encodeURIComponent(serial),
-      { method: 'DELETE' }, s.sess);
+    const r = await proton('/vpn/v1/certificate',
+      { method: 'DELETE', body: { SerialNumber: serial } }, s.sess);
     const d = r.data || {};
-    if (d.Code !== 1000 && d.Code !== 1001) return json(apiError(d, r.status), 502, env, req);
+    if (d.Code !== 1000 && d.Code !== 1001) {
+      // Scope errors: guide the user to the web dashboard instead of a dead end
+      if (d.Code === 9100 || r.status === 403) {
+        return json({
+          error: 'scope_error',
+          message: 'Proton no permite eliminar configuraciones desde esta sesión de API (falta scope `full`). Elimínala en account.proton.me → VPN → WireGuard.',
+        }, 502, env, req);
+      }
+      return json(apiError(d, r.status), 502, env, req);
+    }
     return json({ ok: true }, 200, env, req);
   }
 

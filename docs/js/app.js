@@ -25,6 +25,11 @@ function toast(msg) {
   t.textContent = msg; t.classList.remove('hidden');
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.add('hidden'), 2200);
 }
+function showLoading(text) {
+  $('loading-text').textContent = text || 'Cargando…';
+  $('loading').classList.remove('hidden');
+}
+function hideLoading() { $('loading').classList.add('hidden'); }
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -178,38 +183,46 @@ async function ensureLogin(label) {
   // Full SRP login from the phone
   const sec = await getAccountSecret(label);
   if (!sec) throw new Error('No hay credenciales guardadas para esta cuenta.');
-  toast('Obteniendo parámetros SRP…');
-  const info = await api('/api/auth/info', { method: 'POST', body: { username: sec.username } });
-  if (info.status !== 200) throw new Error(info.data.message || 'Falló /auth/info');
-  const twoFA = info.data.twoFA || {};
-  let totp = null;
-  if (twoFA.Enabled && twoFA.TOTP) {
-    const v = await modalInput('Verificación en 2 pasos', [
-      { id: 'code', label: 'Código de tu app autenticadora', type: 'text', placeholder: '123456' },
-    ], 'Continuar');
-    if (!v || !v.code) throw new Error('Login cancelado');
-    totp = v.code.trim();
+  showLoading('Obteniendo parámetros SRP…');
+  try {
+    const info = await api('/api/auth/info', { method: 'POST', body: { username: sec.username } });
+    if (info.status !== 200) throw new Error(info.data.message || 'Falló /auth/info');
+    const twoFA = info.data.twoFA || {};
+    let totp = null;
+    if (twoFA.Enabled && twoFA.TOTP) {
+      hideLoading();
+      const v = await modalInput('Verificación en 2 pasos', [
+        { id: 'code', label: 'Código de tu app autenticadora', type: 'text', placeholder: '123456' },
+      ], 'Continuar');
+      if (!v || !v.code) throw new Error('Login cancelado');
+      totp = v.code.trim();
+      showLoading('Verificando…');
+    } else {
+      showLoading('Calculando pruebas SRP…');
+    }
+    const proofs = await srpProofs({
+      password: sec.password,
+      saltB64: info.data.salt,
+      modulusB64: info.data.modulus,
+      serverEphemeralB64: info.data.serverEphemeral,
+    });
+    showLoading('Verificando con Proton…');
+    const auth = await api('/api/auth', {
+      method: 'POST',
+      body: {
+        label, username: sec.username,
+        clientEphemeral: proofs.clientEphemeral,
+        clientProof: proofs.clientProof,
+        srpSession: info.data.srpSession,
+        expectedServerProof: proofs.expectedServerProof,
+        totp,
+      },
+    });
+    if (auth.status !== 200) throw new Error(auth.data.message || 'Falló el login');
+    return true;
+  } finally {
+    hideLoading();
   }
-  toast('Calculando pruebas SRP…');
-  const proofs = await srpProofs({
-    password: sec.password,
-    saltB64: info.data.salt,
-    modulusB64: info.data.modulus,
-    serverEphemeralB64: info.data.serverEphemeral,
-  });
-  const auth = await api('/api/auth', {
-    method: 'POST',
-    body: {
-      label, username: sec.username,
-      clientEphemeral: proofs.clientEphemeral,
-      clientProof: proofs.clientProof,
-      srpSession: info.data.srpSession,
-      expectedServerProof: proofs.expectedServerProof,
-      totp,
-    },
-  });
-  if (auth.status !== 200) throw new Error(auth.data.message || 'Falló el login');
-  return true;
 }
 
 /* ============================== accounts screen ===================== */
@@ -371,6 +384,7 @@ async function doCreate() {
   err.textContent = '';
   const btn = $('btn-create');
   btn.disabled = true;
+  showLoading('Creando configuración…');
   try {
     const kp = genKeypair();
     const r = await api('/api/configs', {
@@ -414,6 +428,7 @@ async function doCreate() {
     err.textContent = e.message;
   } finally {
     btn.disabled = false;
+    hideLoading();
   }
 }
 
@@ -503,11 +518,12 @@ function wireUI() {
   $('back-accounts').onclick = () => { show('scr-accounts'); };
   $('btn-new').onclick = async () => {
     try {
-      toast('Cargando servidores…');
+      showLoading('Cargando servidores…');
       await loadServers();
       renderServers();
       show('scr-servers');
     } catch (e) { toast('Error: ' + e.message); }
+    finally { hideLoading(); }
   };
   $('btn-refresh').onclick = () => refreshConfigs();
   $('back-main1').onclick = () => show('scr-main');

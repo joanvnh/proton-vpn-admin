@@ -49,6 +49,20 @@ label.check input { width: auto; margin: 0; }
 .item .t { font-weight: 600; }
 .item .s { font-size: 13px; color: var(--hint); margin-top: 2px; }
 .item .row { margin-top: 8px; }
+/* professional cards */
+.app-icon { font-size: 44px; margin-bottom: 6px; }
+.item.empty { text-align: center; padding: 26px 14px; }
+.empty-icon { font-size: 38px; margin-bottom: 8px; opacity: .85; }
+.item.server-card { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.item.server-card:active { transform: scale(.985); }
+.item.config-card, .item.account-card, .item.server-card {
+  border: 1px solid #00000010;
+  box-shadow: 0 1px 3px #00000010;
+}
+.srv-summary {
+  font-size: 14px; margin-bottom: 6px; padding: 10px 12px;
+  background: var(--bg); border-radius: 10px; border: 1px solid #00000010;
+}
 .chips { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 10px; padding-bottom: 4px; }
 .chip {
   border: 1px solid #00000022; border-radius: 20px; padding: 7px 14px;

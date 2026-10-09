@@ -1,4 +1,4 @@
-import { srpProofs } from './srp.js?v=1.0.5';
+import { srpProofs } from './srp.js?v=1.0.6';
 
 /* ============================== config ============================== */
 const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev'; // v1.0.1
@@ -230,14 +230,14 @@ function renderAccounts() {
   const list = $('acct-list');
   list.innerHTML = '';
   if (!S.accounts.length) {
-    list.innerHTML = '<div class="item"><div class="s">Aún no hay cuentas. Añade la primera abajo.</div></div>';
+    list.innerHTML = '<div class="item empty"><div class="empty-icon">👤</div><div class="s">Aún no hay cuentas.<br>Añade la primera abajo.</div></div>';
   }
   for (const a of S.accounts) {
     const div = document.createElement('div');
-    div.className = 'item';
-    div.innerHTML = '<div class="t">' + esc(a.label) + '</div><div class="s">' + esc(a.username) + '</div>' +
-      '<div class="row"><button class="btn primary" data-open> Abrir</button>' +
-      '<button class="btn danger" data-del>Eliminar</button></div>';
+    div.className = 'item account-card';
+    div.innerHTML = '<div class="t">👤 ' + esc(a.label) + '</div><div class="s">✉️ ' + esc(a.username) + '</div>' +
+      '<div class="row"><button class="btn primary" data-open>▶️ Abrir</button>' +
+      '<button class="btn danger" data-del>🗑️ Eliminar</button></div>';
     div.querySelector('[data-open]').onclick = () => openAccount(a.label);
     div.querySelector('[data-del]').onclick = () => confirmDeleteAccount(a.label);
     list.appendChild(div);
@@ -245,12 +245,12 @@ function renderAccounts() {
 }
 
 function confirmDeleteAccount(label) {
-  modal('Eliminar cuenta',
+  modal('🗑️ Eliminar cuenta',
     '<p>Se borrará <b>' + esc(label) + '</b> de la bóveda y su sesión del servidor. ¿Seguro?</p>',
     [
       { label: 'Cancelar', onClick: (c) => c() },
       {
-        label: 'Eliminar', cls: 'danger',
+        label: '🗑️ Eliminar', cls: 'danger',
         onClick: async (c) => {
           c(); await deleteAccount(label); renderAccounts(); toast('Cuenta eliminada');
         },
@@ -258,17 +258,33 @@ function confirmDeleteAccount(label) {
     ]);
 }
 
-async function openAccount(label) {
-  S.activeLabel = label;
-  // Clear stale data immediately so the previous account's configs/servers
-  // are never shown while the new account loads (or if its login fails).
+function clearAccountCache() {
+  // Reset ALL account-specific state so no data leaks between accounts.
+  // Called before loading a different account's data.
   S.configs = [];
   S.servers = [];
+  S.createServer = null;
+  S.lastConf = null;
+  S.lastConfName = null;
+  // Clear rendered lists immediately
+  $('cfg-list').innerHTML = '';
+  $('srv-list').innerHTML = '';
+}
+
+async function openAccount(label) {
+  if (S.activeLabel === label) return; // already on this account
+  clearAccountCache();
+  S.activeLabel = label;
   $('main-title').textContent = label;
   show('scr-main');
   renderChips();
-  renderConfigs();
-  await refreshConfigs();
+  renderConfigs(); // shows empty state while loading
+  showLoading('Cargando datos de ' + label + '…');
+  try {
+    await refreshConfigs();
+  } finally {
+    hideLoading();
+  }
 }
 
 function renderChips() {
@@ -276,8 +292,9 @@ function renderChips() {
   box.innerHTML = '';
   for (const a of S.accounts) {
     const b = document.createElement('button');
-    b.className = 'chip' + (a.label === S.activeLabel ? ' active' : '');
-    b.textContent = a.label;
+    const active = a.label === S.activeLabel;
+    b.className = 'chip' + (active ? ' active' : '');
+    b.textContent = (active ? '● ' : '○ ') + a.label;
     b.onclick = () => openAccount(a.label);
     box.appendChild(b);
   }
@@ -311,28 +328,28 @@ function renderServers() {
   us.sort((a, b) => (a.Load || 999) - (b.Load || 999));
   const top = us.slice(0, 4);
   if (!top.length) {
-    list.innerHTML = '<div class="item"><div class="s">No hay servidores gratuitos de EE.UU. disponibles.</div></div>';
+    list.innerHTML = '<div class="item empty"><div class="empty-icon">🖥️</div><div class="s">No hay servidores gratuitos de EE.UU. disponibles.</div></div>';
     return;
   }
   const h = document.createElement('div');
   h.className = 'country';
-  h.textContent = 'Estados Unidos · gratuitos · top 4 por menor carga';
+  h.textContent = '🇺🇸 Estados Unidos · gratuitos · top 4 por menor carga';
   list.appendChild(h);
   for (const s of top) {
     const online = (s.Servers || []).filter((p) => p.Status === 1);
     if (!online.length) continue;
     const div = document.createElement('div');
-    div.className = 'item';
+    div.className = 'item server-card';
     div.innerHTML =
-      '<div class="t">' + esc(s.Name) + ' <span class="badge">' + esc(TIER_NAMES[s.Tier] || s.Tier) + '</span></div>' +
-      '<div class="s">' + esc(s.City || '') + ' · score ' + Number(s.Score).toFixed(1) + '</div>' +
+      '<div class="t">🖥️ ' + esc(s.Name) + ' <span class="badge">' + esc(TIER_NAMES[s.Tier] || s.Tier) + '</span></div>' +
+      '<div class="s">📍 ' + esc(s.City || '') + ' · 📊 score ' + Number(s.Score).toFixed(1) + '</div>' +
       '<div>' + featureBadges(s.Features) + '</div>' +
       '<div class="loadbar"><div style="width:' + s.Load + '%;background:' + loadColor(s.Load) + '"></div></div>' +
-      '<div class="s">Carga: ' + s.Load + '%</div>';
+      '<div class="s">📶 Carga: ' + s.Load + '%</div>';
     div.onclick = () => startCreate(s);
     list.appendChild(div);
   }
-  if (list.children.length <= 1) list.innerHTML = '<div class="item"><div class="s">Sin resultados.</div></div>';
+  if (list.children.length <= 1) list.innerHTML = '<div class="item empty"><div class="empty-icon">🔍</div><div class="s">Sin resultados.</div></div>';
 }
 
 /* ============================== create ============================== */
@@ -469,31 +486,31 @@ async function renderConfigs() {
   } catch (e) {}
   list.innerHTML = '';
   if (!S.configs.length) {
-    list.innerHTML = '<div class="item"><div class="s">No hay configuraciones WireGuard en esta cuenta.</div></div>';
+    list.innerHTML = '<div class="item empty"><div class="empty-icon">🔑</div><div class="s">No hay configuraciones WireGuard en esta cuenta.<br>Toca <b>➕ Nueva config</b> para crear una.</div></div>';
     return;
   }
   const sorted = S.configs.slice().sort((a, b) => (b.ExpirationTime || 0) - (a.ExpirationTime || 0));
   for (const c of sorted) {
     const div = document.createElement('div');
-    div.className = 'item';
+    div.className = 'item config-card';
     const fp = (c.ClientKeyFingerprint || '').replace(/=+$/, '').slice(0, 12);
     div.innerHTML =
-      '<div class="t">' + esc(c.DeviceName || '(sin nombre)') + '</div>' +
-      '<div class="s">' + esc(idx[c.SerialNumber] || 'servidor no registrado') +
-      ' · expira ' + fmtDate(c.ExpirationTime) + '<br>huella ' + esc(fp) + '…</div>' +
-      '<div class="row"><button class="btn danger" data-del>Eliminar</button></div>';
+      '<div class="t">🔑 ' + esc(c.DeviceName || '(sin nombre)') + '</div>' +
+      '<div class="s">🖥️ ' + esc(idx[c.SerialNumber] || 'servidor no registrado') +
+      ' · 📅 expira ' + fmtDate(c.ExpirationTime) + '<br>🔒 huella ' + esc(fp) + '…</div>' +
+      '<div class="row"><button class="btn danger" data-del>🗑️ Eliminar</button></div>';
     div.querySelector('[data-del]').onclick = () => confirmDeleteConfig(c);
     list.appendChild(div);
   }
 }
 
 function confirmDeleteConfig(c) {
-  modal('Eliminar configuración',
-    '<p>Se revocará <b>' + esc(c.DeviceName || c.SerialNumber) + '</b> en Proton. Esta acción no se puede deshacer.</p>',
+  modal('🗑️ Eliminar configuración',
+    '<p>Se revocará <b>🔑 ' + esc(c.DeviceName || c.SerialNumber) + '</b> en Proton. Esta acción no se puede deshacer.</p>',
     [
       { label: 'Cancelar', onClick: (c2) => c2() },
       {
-        label: 'Eliminar', cls: 'danger',
+        label: '🗑️ Eliminar', cls: 'danger',
         onClick: async (c2) => {
           c2();
           try {

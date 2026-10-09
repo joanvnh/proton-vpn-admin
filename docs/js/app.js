@@ -1,4 +1,4 @@
-import { srpProofs } from './srp.js?v=1.0.9';
+import { srpProofs } from './srp.js?v=1.1.1';
 
 /* ============================== config ============================== */
 const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev'; // v1.0.1
@@ -619,6 +619,7 @@ async function downloadStoredConfig(c) {
   showLoading('Preparando descarga…');
   try {
     const stored = await getStoredConf(c.SerialNumber);
+    hideLoading();
     if (!stored) {
       showError('Config no disponible',
         'Esta configuración fue creada fuera de la app y no tenemos su clave privada guardada.',
@@ -633,7 +634,6 @@ async function downloadStoredConfig(c) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    hideLoading();
     modal('✅ Descarga completa',
       '<div class="center"><div class="error-icon">⬇️</div>' +
       '<p>Archivo <b>' + esc(stored.name || 'proton.conf') + '</b> descargado.<br>' +

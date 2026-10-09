@@ -1,4 +1,4 @@
-import { srpProofs } from './srp.js?v=1.0.7';
+import { srpProofs } from './srp.js?v=1.0.8';
 
 /* ============================== config ============================== */
 const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev'; // v1.0.1
@@ -92,6 +92,36 @@ function modalInput(title, fields, okLabel) {
   });
 }
 
+/* ============================== professional errors ================= */
+function showError(title, userMsg, technical) {
+  // Professional in-app error notification with optional email report.
+  const tech = technical || userMsg;
+  const body =
+    '<div class="center error-modal"><div class="error-icon">⚠️</div>' +
+    '<p>' + esc(userMsg) + '</p></div>' +
+    (technical ? '<div class="error-detail">' + esc(tech) + '</div>' : '');
+  modal('❌ ' + title, body, [
+    { label: 'Cerrar', onClick: (c) => c() },
+    {
+      label: '📧 Enviar reporte', cls: 'primary',
+      onClick: (c) => {
+        c();
+        const subject = encodeURIComponent('[Proton VPN Admin] Error: ' + title);
+        const bodyTxt = encodeURIComponent(
+          'Reporte de error — Proton VPN Admin\n' +
+          'Fecha: ' + new Date().toISOString() + '\n' +
+          'Cuenta: ' + (S.activeLabel || '(ninguna)') + '\n' +
+          'Usuario Telegram: ' + (S.tgUser && S.tgUser.id ? S.tgUser.id : '?') + '\n' +
+          'App v1.0.8\n\n' +
+          'Mensaje: ' + userMsg + '\n\n' +
+          'Detalle técnico:\n' + tech + '\n');
+        window.open('mailto:joanvnh@gmail.com?subject=' + subject + '&body=' + bodyTxt, '_blank');
+        toast('Abriendo tu app de correo…');
+      },
+    },
+  ]);
+}
+
 /* ============================== CloudStorage ======================== */
 function tg() { return window.Telegram && Telegram.WebApp ? Telegram.WebApp : null; }
 function csGetItems(keys) {
@@ -154,6 +184,13 @@ async function getAccountSecret(label) {
 async function deleteAccount(label) {
   await csRemoveItem('pv_acct_' + label);
   await csRemoveItem('pv_cfgidx_' + label).catch(() => {});
+  // remove stored .confs for this account
+  try {
+    const vals = await csGetItems(['pv_conflist_' + label]);
+    const serials = JSON.parse(vals['pv_conflist_' + label] || '[]');
+    for (const s of serials) await csRemoveItem('pv_conf_' + label + '_' + s).catch(() => {});
+    await csRemoveItem('pv_conflist_' + label).catch(() => {});
+  } catch (e) {}
   try { await api('/api/session/drop', { method: 'POST', body: { label } }); } catch (e) {}
   const labels = S.accounts.map((a) => a.label).filter((l) => l !== label);
   await csSetItem('pv_accounts', JSON.stringify(labels));
@@ -481,10 +518,20 @@ async function doCreate() {
     $('result-conf').textContent = conf;
     $('qr-box').classList.add('hidden');
     // remember which server this cert was made for (cert list doesn't say)
+    // and store the .conf ENCRYPTED so it can be downloaded / QR'd later
     try {
       const idx = JSON.parse((await csGetItems(['pv_cfgidx_' + S.activeLabel]))['pv_cfgidx_' + S.activeLabel] || '{}');
       idx[r.data.serialNumber] = S.createServer.Name + ' · ' + countryName(S.createServer.ExitCountry);
       await csSetItem('pv_cfgidx_' + S.activeLabel, JSON.stringify(idx));
+      const encConf = await vaultEncrypt({ conf, name: S.lastConfName });
+      await csSetItem('pv_conf_' + S.activeLabel + '_' + r.data.serialNumber, encConf);
+      const clKey = 'pv_conflist_' + S.activeLabel;
+      const clVals = await csGetItems([clKey]);
+      const clList = JSON.parse(clVals[clKey] || '[]');
+      if (!clList.includes(r.data.serialNumber)) {
+        clList.push(r.data.serialNumber);
+        await csSetItem(clKey, JSON.stringify(clList));
+      }
     } catch (e) {}
     show('scr-result');
     await refreshConfigs(true);
@@ -508,7 +555,11 @@ async function refreshConfigs(silent) {
     S.configs = r.data.configs || [];
     renderConfigs();
   } catch (e) {
-    if (!silent) toast('Error: ' + e.message);
+    if (!silent) {
+      const tech = 'refreshConfigs(' + S.activeLabel + '): ' + e.message +
+        (e.stack ? '\n' + String(e.stack).split('\n').slice(0, 3).join('\n') : '');
+      showError('Error al cargar', e.message, tech);
+    }
   }
 }
 
@@ -532,10 +583,65 @@ async function renderConfigs() {
       '<div class="t">🔑 ' + esc(c.DeviceName || '(sin nombre)') + '</div>' +
       '<div class="s">🖥️ ' + esc(idx[c.SerialNumber] || 'servidor no registrado') +
       ' · 📅 expira ' + fmtDate(c.ExpirationTime) + '<br>🔒 huella ' + esc(fp) + '…</div>' +
-      '<div class="row"><button class="btn danger" data-del>🗑️ Eliminar</button></div>';
+      '<div class="row">' +
+      '<button class="btn" data-dl>⬇️</button>' +
+      '<button class="btn" data-qr>📷</button>' +
+      '<button class="btn danger" data-del>🗑️ Eliminar</button></div>';
     div.querySelector('[data-del]').onclick = () => confirmDeleteConfig(c);
+    div.querySelector('[data-dl]').onclick = () => downloadStoredConfig(c);
+    div.querySelector('[data-qr]').onclick = () => qrStoredConfig(c);
     list.appendChild(div);
   }
+}
+
+async function getStoredConf(serial) {
+  // Returns {conf, name} or null if not stored (e.g. created outside the app)
+  try {
+    const key = 'pv_conf_' + S.activeLabel + '_' + serial;
+    const vals = await csGetItems([key]);
+    if (!vals[key]) return null;
+    return await vaultDecrypt(vals[key]);
+  } catch (e) { return null; }
+}
+
+async function downloadStoredConfig(c) {
+  showLoading('Preparando descarga…');
+  try {
+    const stored = await getStoredConf(c.SerialNumber);
+    if (!stored) {
+      showError('Config no disponible',
+        'Esta configuración fue creada fuera de la app y no tenemos su clave privada guardada.',
+        'serial=' + c.SerialNumber + ' — sin pv_conf_* en CloudStorage');
+      return;
+    }
+    const blob = new Blob([stored.conf], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = stored.name || 'proton.conf';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Descargado');
+  } finally { hideLoading(); }
+}
+
+async function qrStoredConfig(c) {
+  showLoading('Generando QR…');
+  try {
+    const stored = await getStoredConf(c.SerialNumber);
+    if (!stored) {
+      showError('Config no disponible',
+        'Esta configuración fue creada fuera de la app y no tenemos su clave privada guardada.',
+        'serial=' + c.SerialNumber + ' — sin pv_conf_* en CloudStorage');
+      return;
+    }
+    const qr = qrcode(0, 'L');
+    qr.addData(stored.conf);
+    qr.make();
+    modal('📷 ' + (c.DeviceName || 'QR'),
+      '<div class="center">' + qr.createSvgTag({ cellSize: 4, margin: 8, scalable: true }) +
+      '<p class="meta">Escanea con tu app WireGuard</p></div>',
+      [{ label: 'Cerrar', onClick: (x) => x() }]);
+  } finally { hideLoading(); }
 }
 
 function confirmDeleteConfig(c) {

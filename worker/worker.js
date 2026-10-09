@@ -259,6 +259,46 @@ async function handle(req, env) {
     return json({ ok: true }, 200, env, req);
   }
 
+  // ---- POST /api/report-error : forward an error report to the owner ----
+  // Sends via Telegram bot (instant, reliable). Email via Resend is sent too
+  // if RESEND_API_KEY is configured as a Worker secret.
+  if (path === '/api/report-error' && req.method === 'POST') {
+    const title = String(body.title || 'Error').slice(0, 120);
+    const message = String(body.message || '').slice(0, 500);
+    const technical = String(body.technical || '').slice(0, 2000);
+    const label = String(body.label || '').slice(0, 40);
+    const text =
+      '⚠️ <b>Proton VPN Admin — reporte de error</b>\n' +
+      '🕐 ' + new Date().toISOString() + '\n' +
+      '👤 Cuenta: ' + (label || '(ninguna)') + '\n' +
+      '📌 ' + title + '\n\n' + message +
+      (technical ? '\n\n<pre>' + technical.replace(/[<>&]/g, (c) => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])) + '</pre>' : '');
+    try {
+      await fetch('https://api.telegram.org/bot' + env.BOT_TOKEN + '/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: env.OWNER_ID, text, parse_mode: 'HTML' }),
+      });
+    } catch (e) {}
+    // Email via Resend (optional — needs RESEND_API_KEY secret)
+    if (env.RESEND_API_KEY) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'Proton VPN Admin <onboarding@resend.dev>',
+            to: 'joanvnh@gmail.com',
+            subject: '[Proton VPN Admin] Error: ' + title,
+            text: 'Fecha: ' + new Date().toISOString() + '\nCuenta: ' + label +
+              '\n\n' + message + '\n\nDetalle técnico:\n' + technical,
+          }),
+        });
+      } catch (e) {}
+    }
+    return json({ ok: true, emailed: !!env.RESEND_API_KEY }, 200, env, req);
+  }
+
   // ---- from here on a working session is required ----
   const needSession = async (label) => {
     if (!label) return { err: json({ error: 'missing_label' }, 400, env, req) };

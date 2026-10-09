@@ -1,4 +1,4 @@
-import { srpProofs } from './srp.js?v=1.0.8';
+import { srpProofs } from './srp.js?v=1.0.9';
 
 /* ============================== config ============================== */
 const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev'; // v1.0.1
@@ -94,7 +94,7 @@ function modalInput(title, fields, okLabel) {
 
 /* ============================== professional errors ================= */
 function showError(title, userMsg, technical) {
-  // Professional in-app error notification with optional email report.
+  // Professional in-app error notification with automatic report.
   const tech = technical || userMsg;
   const body =
     '<div class="center error-modal"><div class="error-icon">⚠️</div>' +
@@ -104,19 +104,30 @@ function showError(title, userMsg, technical) {
     { label: 'Cerrar', onClick: (c) => c() },
     {
       label: '📧 Enviar reporte', cls: 'primary',
-      onClick: (c) => {
+      onClick: async (c) => {
         c();
-        const subject = encodeURIComponent('[Proton VPN Admin] Error: ' + title);
-        const bodyTxt = encodeURIComponent(
-          'Reporte de error — Proton VPN Admin\n' +
-          'Fecha: ' + new Date().toISOString() + '\n' +
-          'Cuenta: ' + (S.activeLabel || '(ninguna)') + '\n' +
-          'Usuario Telegram: ' + (S.tgUser && S.tgUser.id ? S.tgUser.id : '?') + '\n' +
-          'App v1.0.8\n\n' +
-          'Mensaje: ' + userMsg + '\n\n' +
-          'Detalle técnico:\n' + tech + '\n');
-        window.open('mailto:joanvnh@gmail.com?subject=' + subject + '&body=' + bodyTxt, '_blank');
-        toast('Abriendo tu app de correo…');
+        showLoading('Enviando reporte…');
+        try {
+          const r = await api('/api/report-error', {
+            method: 'POST',
+            body: { title, message: userMsg, technical: tech, label: S.activeLabel },
+          });
+          hideLoading();
+          if (r.status === 200) {
+            toast(r.data.emailed ? 'Reporte enviado por Telegram y email ✓' : 'Reporte enviado por Telegram ✓');
+          } else {
+            throw new Error('worker');
+          }
+        } catch (e) {
+          hideLoading();
+          // fallback: open email client with pre-filled report
+          const subject = encodeURIComponent('[Proton VPN Admin] Error: ' + title);
+          const bodyTxt = encodeURIComponent(
+            'Reporte de error — Proton VPN Admin\nFecha: ' + new Date().toISOString() +
+            '\nCuenta: ' + (S.activeLabel || '(ninguna)') + '\n\n' + userMsg +
+            '\n\nDetalle técnico:\n' + tech + '\n');
+          window.location.href = 'mailto:joanvnh@gmail.com?subject=' + subject + '&body=' + bodyTxt;
+        }
       },
     },
   ]);
@@ -618,10 +629,17 @@ async function downloadStoredConfig(c) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = stored.name || 'proton.conf';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    toast('Descargado');
-  } finally { hideLoading(); }
+    hideLoading();
+    modal('✅ Descarga completa',
+      '<div class="center"><div class="error-icon">⬇️</div>' +
+      '<p>Archivo <b>' + esc(stored.name || 'proton.conf') + '</b> descargado.<br>' +
+      'Revisa tu carpeta de descargas.</p></div>',
+      [{ label: 'Cerrar', onClick: (x) => x() }]);
+  } catch (e) { hideLoading(); }
 }
 
 async function qrStoredConfig(c) {

@@ -1,4 +1,4 @@
-import { srpProofs } from './srp.js?v=1.0.6';
+import { srpProofs } from './srp.js?v=1.0.7';
 
 /* ============================== config ============================== */
 const WORKER_URL = 'https://proton-vpn-admin.joanvnh.workers.dev'; // v1.0.1
@@ -8,7 +8,7 @@ const TIER_NAMES = { 0: 'Free', 2: 'Plus', 3: 'Visionary' };
 /* ============================== state =============================== */
 const S = {
   initData: '', tgUser: null,
-  pinKey: null, accounts: [], activeLabel: null,
+  pinKey: null, accounts: [], activeLabel: null, theme: 'auto',
   servers: [], configs: [], createServer: null,
   regionNames: new Intl.DisplayNames(['es'], { type: 'region' }),
 };
@@ -275,9 +275,9 @@ async function openAccount(label) {
   if (S.activeLabel === label) return; // already on this account
   clearAccountCache();
   S.activeLabel = label;
-  $('main-title').textContent = label;
+  $('main-title').textContent = '🔑 ' + label;
   show('scr-main');
-  renderChips();
+  renderAccountSwitcher();
   renderConfigs(); // shows empty state while loading
   showLoading('Cargando datos de ' + label + '…');
   try {
@@ -287,17 +287,51 @@ async function openAccount(label) {
   }
 }
 
-function renderChips() {
-  const box = $('acct-chips');
-  box.innerHTML = '';
+/* ============================== theme =============================== */
+async function loadTheme() {
+  try {
+    const vals = await csGetItems(['pv_theme']);
+    applyTheme(vals.pv_theme || 'auto');
+  } catch (e) { applyTheme('auto'); }
+}
+function applyTheme(mode) {
+  // mode: 'auto' | 'light' | 'dark'
+  const root = document.documentElement;
+  if (mode === 'auto') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', mode);
+  S.theme = mode;
+  const icon = mode === 'dark' ? '☀️' : '🌙';
+  const b1 = $('btn-theme'), b2 = $('btn-theme2');
+  if (b1) b1.textContent = icon;
+  if (b2) b2.textContent = icon;
+  try { tg().CloudStorage.setItem('pv_theme', mode, () => {}); } catch (e) {}
+}
+function cycleTheme() {
+  const next = S.theme === 'light' ? 'dark' : S.theme === 'dark' ? 'auto' : 'light';
+  applyTheme(next);
+  toast(next === 'auto' ? 'Tema: automático (Telegram)' : next === 'light' ? 'Tema: claro' : 'Tema: oscuro');
+}
+
+/* ============================== account switcher ==================== */
+function renderAccountSwitcher() {
+  const label = S.activeLabel;
+  $('acct-current-label').textContent = label || '—';
+  const dd = $('acct-dropdown');
+  dd.innerHTML = '';
+  dd.classList.add('hidden');
   for (const a of S.accounts) {
     const b = document.createElement('button');
-    const active = a.label === S.activeLabel;
-    b.className = 'chip' + (active ? ' active' : '');
-    b.textContent = (active ? '● ' : '○ ') + a.label;
-    b.onclick = () => openAccount(a.label);
-    box.appendChild(b);
+    b.className = 'acct-option';
+    const active = a.label === label;
+    b.innerHTML = '<span class="pv-logo"></span><span>' + esc(a.label) +
+      '<span class="sub">' + esc(a.username) + '</span></span>' +
+      (active ? '<span class="check">✓</span>' : '');
+    if (!active) b.onclick = () => { dd.classList.add('hidden'); openAccount(a.label); };
+    dd.appendChild(b);
   }
+}
+function toggleAccountDropdown() {
+  $('acct-dropdown').classList.toggle('hidden');
 }
 
 /* ============================== servers ============================= */
@@ -556,6 +590,16 @@ function wireUI() {
     finally { hideLoading(); }
   };
   $('btn-refresh').onclick = () => refreshConfigs();
+  $('acct-current').onclick = toggleAccountDropdown;
+  const bt1 = $('btn-theme'), bt2 = $('btn-theme2');
+  if (bt1) bt1.onclick = cycleTheme;
+  if (bt2) bt2.onclick = cycleTheme;
+  // close dropdown when tapping elsewhere
+  document.addEventListener('click', (e) => {
+    const dd = $('acct-dropdown');
+    if (!dd || dd.classList.contains('hidden')) return;
+    if (!e.target.closest('.acct-switcher')) dd.classList.add('hidden');
+  });
   $('back-main1').onclick = () => show('scr-main');
   $('back-servers').onclick = () => show('scr-servers');
   $('back-main2').onclick = () => show('scr-main');
@@ -640,6 +684,7 @@ async function unlock() {
   w.ready();
   w.expand();
   wireUI();
+  loadTheme();
   // health check (no auth needed)
   fetch(WORKER_URL + '/api/health').catch(() => {});
   show('scr-pin');

@@ -25,7 +25,10 @@
 
   <!-- Accounts -->
   <section id="scr-accounts" class="screen hidden">
-    <header class="topbar"><h1>👤 Mis cuentas</h1></header>
+    <header class="topbar">
+      <h1>👤 Mis cuentas</h1>
+      <button id="btn-theme2" class="btn ghost theme-btn" title="Cambiar tema">🌙</button>
+    </header>
     <div id="acct-list" class="list"></div>
     <div class="card">
       <h2>➕ Añadir cuenta</h2>
@@ -42,8 +45,16 @@
     <header class="topbar">
       <button id="back-accounts" class="btn ghost">‹</button>
       <h1 id="main-title">🔑 Cuenta</h1>
+      <button id="btn-theme" class="btn ghost theme-btn" title="Cambiar tema">🌙</button>
     </header>
-    <div id="acct-chips" class="chips"></div>
+    <div class="acct-switcher">
+      <button id="acct-current" class="acct-current">
+        <span class="pv-logo"></span>
+        <span id="acct-current-label">—</span>
+        <span class="caret">▾</span>
+      </button>
+      <div id="acct-dropdown" class="acct-dropdown hidden"></div>
+    </div>
     <div class="row actions">
       <button id="btn-new" class="btn primary">➕ Nueva config</button>
       <button id="btn-refresh" class="btn" title="Recargar">🔄</button>
@@ -141,9 +152,9 @@
   </div>
 </div>
 
-<script src="vendor/bcrypt.js?v=1.0.6"></script>
-<script src="vendor/nacl-fast.min.js?v=1.0.6"></script>
-<script src="vendor/qrcode.js?v=1.0.6"></script>
-<script type="module" src="js/app.js?v=1.0.6"></script>
+<script src="vendor/bcrypt.js?v=1.0.7"></script>
+<script src="vendor/nacl-fast.min.js?v=1.0.7"></script>
+<script src="vendor/qrcode.js?v=1.0.7"></script>
+<script type="module" src="js/app.js?v=1.0.7"></script>
 </body>
 </html>
